@@ -59,6 +59,8 @@ TelephonyStateRegistryStub::TelephonyStateRegistryStub()
         [this](MessageParcel &data, MessageParcel &reply) { return OnUpdateVoiceMailMsgIndicator(data, reply); };
     memberFuncMap_[StateNotifyInterfaceCode::ICC_ACCOUNT_CHANGE] =
         [this](MessageParcel &data, MessageParcel &reply) { return OnIccAccountUpdated(data, reply); };
+    memberFuncMap_[StateNotifyInterfaceCode::COMMUNICATION_STATE] =
+        [this](MessageParcel &data, MessageParcel &reply) { return OnCommunicationStateUpdated(data, reply); };
     memberFuncMap_[StateNotifyInterfaceCode::SIM_ACTIVR_STATE] =
         [this](MessageParcel &data, MessageParcel &reply) { return OnSimActiveStateUpdated(data, reply); };
 }
@@ -459,5 +461,13 @@ int32_t TelephonyStateRegistryStub::UnregisterStateChange(int32_t slotId, uint32
     int32_t tokenId = static_cast<int32_t>(IPCSkeleton::GetCallingTokenID());
     return UnregisterStateChange(slotId, mask, tokenId, IPCSkeleton::GetCallingPid());
 }
+int32_t TelephonyStateRegistryStub::OnCommunicationStateUpdated(MessageParcel &data, MessageParcel &reply)
+{
+    int32_t slotId = 0;
+    bool is5A = false;
+    if (!data.ReadInt32(slotId) || !data.ReadBool(is5A)) { return TELEPHONY_ERR_ARGUMENT_INVALID; }
+    return reply.WriteInt32(UpdateCommunicationState(slotId, is5A)) ? NO_ERROR : TELEPHONY_ERR_WRITE_DATA_FAIL;
+}
+
 } // namespace Telephony
 } // namespace OHOS

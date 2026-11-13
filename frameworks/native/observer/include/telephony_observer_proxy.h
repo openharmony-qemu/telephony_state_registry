@@ -28,26 +28,27 @@ public:
     explicit TelephonyObserverProxy(const sptr<IRemoteObject> &impl);
     virtual ~TelephonyObserverProxy() = default;
     void OnCallStateUpdated(
-        int32_t slotId, int32_t callState, const std::u16string &phoneNumber);
+        int32_t slotId, int32_t callState, const std::u16string &phoneNumber) override;
     void OnCallStateUpdatedEx(
-        int32_t slotId, int32_t callStateEx);
+        int32_t slotId, int32_t callStateEx) override;
     void OnSignalInfoUpdated(
-        int32_t slotId, const std::vector<sptr<SignalInformation>> &vec);
+        int32_t slotId, const std::vector<sptr<SignalInformation>> &vec) override;
     void OnNetworkStateUpdated(
-        int32_t slotId, const sptr<NetworkState> &networkState);
+        int32_t slotId, const sptr<NetworkState> &networkState) override;
     void OnCellInfoUpdated(
-        int32_t slotId, const std::vector<sptr<CellInformation>> &vec);
+        int32_t slotId, const std::vector<sptr<CellInformation>> &vec) override;
     void OnSimStateUpdated(
-        int32_t slotId, CardType type, SimState state, LockReason reason);
+        int32_t slotId, CardType type, SimState state, LockReason reason) override;
     void OnCellularDataConnectStateUpdated(
-        int32_t slotId, int32_t dataState, int32_t networkType);
+        int32_t slotId, int32_t dataState, int32_t networkType) override;
     void OnCellularDataFlowUpdated(
-        int32_t slotId, int32_t dataFlowType);
-    void OnCfuIndicatorUpdated(int32_t slotId, bool cfuResult);
-    void OnVoiceMailMsgIndicatorUpdated(int32_t slotId, bool voiceMailMsgResult);
-    void OnIccAccountUpdated();
-    void OnCCallStateUpdated(int32_t slotId, int32_t callState, const std::u16string &phoneNumber);
-    void OnSimActiveStateUpdated(int32_t slotId, bool enable);
+        int32_t slotId, int32_t dataFlowType) override;
+    void OnCfuIndicatorUpdated(int32_t slotId, bool cfuResult) override;
+    void OnVoiceMailMsgIndicatorUpdated(int32_t slotId, bool voiceMailMsgResult) override;
+    void OnIccAccountUpdated() override;
+    void OnCCallStateUpdated(int32_t slotId, int32_t callState, const std::u16string &phoneNumber) override;
+    void OnCommunicationStateUpdated(int32_t slotId, bool is5A) override;
+    void OnSimActiveStateUpdated(int32_t slotId, bool enable) override;
 
 private:
     int32_t SendRequest(int32_t msgId, MessageParcel &dataParcel, MessageParcel &replyParcel, MessageOption &option);

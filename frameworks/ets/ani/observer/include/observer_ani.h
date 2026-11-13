@@ -40,6 +40,7 @@ enum class TelephonyUpdateEventType {
     EVENT_CFU_INDICATOR_UPDATE = Telephony::TelephonyObserverBroker::OBSERVER_MASK_CFU_INDICATOR,
     EVENT_VOICE_MAIL_MSG_INDICATOR_UPDATE = Telephony::TelephonyObserverBroker::OBSERVER_MASK_VOICE_MAIL_MSG_INDICATOR,
     EVENT_ICC_ACCOUNT_CHANGE = Telephony::TelephonyObserverBroker::OBSERVER_MASK_ICC_ACCOUNT,
+    EVENT_COMMUNICATION_STATE_UPDATE = Telephony::TelephonyObserverBroker::OBSERVER_MASK_COMMUNICATION_STATE,
     EVENT_SIM_ACTIVE_STATE_UPDATE = Telephony::TelephonyObserverBroker::OBSERVER_MASK_SIM_ACTIVE_STATE,
 };
 
@@ -54,9 +55,11 @@ public:
     void OnCellularDataFlowUpdated(int32_t slotId, int32_t dataFlowType) override;
     void OnIccAccountUpdated() override;
     void OnCallStateUpdated(int32_t slotId, int32_t callState, const std::u16string &teleNumber) override;
+    void OnCommunicationStateUpdated(int32_t slotId, bool is5A) override;
     void OnSimActiveStateUpdated(int32_t slotId, bool enable) override;
 };
 
+bool HasCommunicationPermission();
 bool IsValidSlotIdEx(int32_t slotId, uint32_t eventType);
 ArktsError EventListenerRegister(int32_t slotId, uint32_t eventType);
 ArktsError EventListenerUnRegister(int32_t slotId, uint32_t eventType);

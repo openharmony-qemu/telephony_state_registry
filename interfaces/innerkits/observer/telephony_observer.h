@@ -145,6 +145,7 @@ public:
      * @param slotId Indicates the slot identification.
      * @param enable Indicates the tel active state.
      */
+    void OnCommunicationStateUpdated(int32_t slotId, bool is5A) override;
     void OnSimActiveStateUpdated(int32_t slotId, bool enable) override;
 
 private:
@@ -166,6 +167,7 @@ private:
     void OnIccAccountUpdatedInner(MessageParcel &data, MessageParcel &reply);
     void OnCallStateUpdatedExInner(MessageParcel &data, MessageParcel &reply);
     void OnCCallStateUpdatedInner(MessageParcel &data, MessageParcel &reply);
+    void OnCommunicationStateUpdatedInner(MessageParcel &data, MessageParcel &reply);
     void OnSimActiveStateUpdatedInner(MessageParcel &data, MessageParcel &reply);
     static constexpr int32_t CELL_NUM_MAX = 100;
     static constexpr int32_t SIGNAL_NUM_MAX = 100;

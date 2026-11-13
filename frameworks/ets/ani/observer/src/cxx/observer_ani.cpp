@@ -22,6 +22,9 @@
 #include "state_registry_errors.h"
 #include "napi_util.h"
 #include "cxx.h"
+#include "accesstoken_kit.h"
+#include "ipc_skeleton.h"
+#include "telephony_permission.h"
 #include "wrapper.rs.h"
 
 namespace OHOS {
@@ -31,6 +34,17 @@ namespace ObserverAni {
 constexpr const char *OBSERVER_JS_PERMISSION_ERROR_STRING =
     "Permission denied. An attempt was made to Observer "
     "On forbidden by permission : ohos.permission.GET_NETWORK_INFO or ohos.permission.LOCATION ";
+
+bool HasCommunicationPermission()
+{
+    return Security::AccessToken::AccessTokenKit::VerifyAccessToken(IPCSkeleton::GetSelfTokenID(),
+        Permission::GET_NETWORK_INFO) == Security::AccessToken::PERMISSION_GRANTED;
+}
+
+void AniTelephonyObserver::OnCommunicationStateUpdated(int32_t slotId, bool is5A)
+{
+    if (HasCommunicationPermission()) { on_communication_state_updated(slotId, is5A); }
+}
 
 void AniTelephonyObserver::OnSignalInfoUpdated(
     int32_t slotId, const std::vector<sptr<Telephony::SignalInformation>> &signalInfoList)
@@ -153,6 +167,9 @@ bool IsValidSlotIdEx(int32_t slotId, uint32_t eventType)
     if (eventType == static_cast<uint32_t>(TelephonyUpdateEventType::EVENT_CALL_STATE_UPDATE)) {
         defaultSlotId = -1;
     }
+    if (eventType == static_cast<uint32_t>(TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE_UPDATE)) {
+        return slotId >= 0 && slotId < SIM_SLOT_COUNT;
+    }
     // One more slot for VSim.
     return ((slotId >= defaultSlotId) && (slotId < SIM_SLOT_COUNT + 1));
 }
@@ -170,7 +187,8 @@ ArktsError EventListenerRegister(int32_t slotId, uint32_t eventType)
     }
     errorCode = Telephony::TelephonyStateManager::AddStateObserver(
         observer, slotId, eventType,
-        eventType == static_cast<uint32_t>(TelephonyUpdateEventType::EVENT_CALL_STATE_UPDATE));
+        (eventType == static_cast<uint32_t>(TelephonyUpdateEventType::EVENT_CALL_STATE_UPDATE) ||
+        eventType == static_cast<uint32_t>(TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE_UPDATE)));
     if (errorCode == TELEPHONY_STATE_REGISTRY_PERMISSION_DENIED) {
         ArktsError ArktsErr = {
             .errorCode = JS_ERROR_TELEPHONY_PERMISSION_DENIED,

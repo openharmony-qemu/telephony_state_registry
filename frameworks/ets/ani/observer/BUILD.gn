@@ -43,6 +43,7 @@ ohos_static_library("observer_ani_cxx") {
     "$SUBSYSTEM_DIR/state_registry/frameworks/native/observer:tel_state_registry_api",
   ]
   external_deps = [
+    "access_token:libaccesstoken_sdk",
     "c_utils:utils",
     "core_service:libtel_common",
     "core_service:tel_core_service_api",

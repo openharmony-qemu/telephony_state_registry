@@ -58,6 +58,7 @@ public:
     int32_t UpdateCfuIndicator(int32_t slotId, bool cfuResult) override;
     int32_t UpdateVoiceMailMsgIndicator(int32_t slotId, bool voiceMailMsgResult) override;
     int32_t UpdateIccAccount() override;
+    int32_t UpdateCommunicationState(int32_t slotId, bool is5A) override;
     int32_t UpdateSimActiveState(int32_t slotId, bool activeStateResult) override;
     int32_t RegisterStateChange(const sptr<TelephonyObserverBroker> &telephonyObserver, int32_t slotId, uint32_t mask,
         const std::string &bundleName, bool notifyNow, pid_t pid, int32_t uid, int32_t tokenId,
@@ -92,6 +93,7 @@ private:
     bool IsCommonEventServiceAbilityExist();
 
 private:
+    std::map<int32_t, bool> communicationStates_;
     ServiceRunningState state_ = ServiceRunningState::STATE_STOPPED;
     std::shared_mutex lock_;
     int32_t slotSize_ = 0;

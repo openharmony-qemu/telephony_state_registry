@@ -43,6 +43,8 @@ ani_rs::ani_constructor! {
         "onCallStateChange": observer::on_call_state_change,
         "onCallStateChangeOptions": observer::on_call_state_change_option,
         "offCallStateChange": observer::off_call_state_change,
+        "onCommunicationStateChangeInner": observer::on_communication_state_change,
+        "offCommunicationStateChangeInner": observer::off_communication_state_change,
         "onGetSimActiveState": observer::on_get_sim_active_state,
         "offGetSimActiveState": observer::off_get_sim_active_state,
     ]

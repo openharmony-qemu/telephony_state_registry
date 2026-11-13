@@ -133,6 +133,15 @@ struct SimActiveStateContext : EventListener {
         return *this;
     }
 };
+
+struct CommunicationStateContext : EventListener {
+    bool is5A;
+    CommunicationStateContext &operator=(const CommunicationStateUpdate &info)
+    {
+        is5A = info.is5A;
+        return *this;
+    }
+};
 } // namespace Telephony
 } // namespace OHOS
 #endif // UPDATE_CONTEXTS_H

@@ -30,6 +30,7 @@ pub enum CallbackFlavor {
     NetworkStateChange(GlobalRefCallback<(bridge::NetworkState,)>),
     CallStateChange(GlobalRefCallback<(bridge::CallStateInfo,)>),
     SimActiveStateChange(GlobalRefCallback<(bool,)>),
+    CommunicationStateChange(GlobalRefCallback<(bool,)>),
 }
 
 #[derive(PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub enum TelephonyUpdateEventType {
     EventVoiceMailMsgIndicatorUpdate = 0x00000200,
     EventIccAccountChange = 0x00000400,
     EventSimActiveStateUpdate = 0x00001000,
+    EventCommunicationStateUpdate = 0x00002000,
 }
 
 impl TelephonyUpdateEventType {
@@ -64,6 +66,7 @@ impl TelephonyUpdateEventType {
             TelephonyUpdateEventType::EventVoiceMailMsgIndicatorUpdate => 0x00000200,
             TelephonyUpdateEventType::EventIccAccountChange => 0x00000400,
             TelephonyUpdateEventType::EventSimActiveStateUpdate => 0x00001000,
+            TelephonyUpdateEventType::EventCommunicationStateUpdate => 0x00002000,
         }
     }
 }
@@ -436,6 +439,30 @@ impl Register {
         }
     }
 
+    pub fn unregister_communication(&self, slot_id: i32, callback: CallbackFlavor) -> Result<(), BusinessError> {
+        let mut inner = self.inner.lock().unwrap();
+        inner.retain(|listener| !(listener.event_type == TelephonyUpdateEventType::EventCommunicationStateUpdate &&
+            listener.slot_id == slot_id && listener.callback_ref == callback));
+        if !Self::check_event_type_exist(&inner, slot_id, &TelephonyUpdateEventType::EventCommunicationStateUpdate) {
+            let error = wrapper::ffi::EventListenerUnRegister(slot_id,
+                TelephonyUpdateEventType::EventCommunicationStateUpdate.to_u32());
+            if error.is_error() { return Err(BusinessError::from(error)); }
+        }
+        Ok(())
+    }
+
+    pub fn execute_on_communication_state_change(&self, slot_id: i32, state: bool) {
+        if !wrapper::ffi::HasCommunicationPermission() { return; }
+        let inner = self.inner.lock().unwrap();
+        for listener in inner.deref() {
+            if listener.event_type == TelephonyUpdateEventType::EventCommunicationStateUpdate && listener.slot_id == slot_id {
+                if let CallbackFlavor::CommunicationStateChange(callback) = &listener.callback_ref {
+                    callback.execute((state,));
+                }
+            }
+        }
+    }
+
     pub fn execute_on_sim_active_state_change(&self, slot_id: i32, is_active: bool) {
         let inner = self.inner.lock().unwrap();
         if inner.is_empty() {
@@ -502,3 +529,7 @@ pub fn on_sim_active_state_updated(slot_id: i32, is_active: bool) {
     Register::get_instance().execute_on_sim_active_state_change(slot_id, is_active);
 }
 
+
+pub fn on_communication_state_updated(slot_id: i32, is5a: bool) {
+    Register::get_instance().execute_on_communication_state_change(slot_id, is5a);
+}

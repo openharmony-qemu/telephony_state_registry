@@ -433,3 +433,27 @@ pub fn off_get_sim_active_state(
 
     Ok(())
 }
+fn check_communication_permission() -> Result<(), BusinessError> {
+    if !crate::wrapper::ffi::HasCommunicationPermission() {
+        return Err(BusinessError::new_static(201, "Permission denied: ohos.permission.GET_NETWORK_INFO."));
+    }
+    Ok(())
+}
+
+#[ani_rs::native]
+pub fn on_communication_state_change(env: &AniEnv, callback: AniFnObject, slot_id: i32) -> Result<(), BusinessError> {
+    check_communication_permission()?;
+    let callback = callback.into_global_callback(env).map_err(|_| BusinessError::new_static(401, "Invalid callback."))?;
+    Register::get_instance().register(EventListener::new(TelephonyUpdateEventType::EventCommunicationStateUpdate,
+        slot_id, CallbackFlavor::CommunicationStateChange(callback)))
+}
+
+#[ani_rs::native]
+pub fn off_communication_state_change(env: &AniEnv, callback: AniFnObject, slot_id: i32) -> Result<(), BusinessError> {
+    check_communication_permission()?;
+    if !crate::wrapper::ffi::IsValidSlotIdEx(slot_id, TelephonyUpdateEventType::EventCommunicationStateUpdate.to_u32()) {
+        return Err(BusinessError::new_static(8300001, "Invalid slotId."));
+    }
+    let callback = callback.into_global_callback(env).map_err(|_| BusinessError::new_static(401, "Invalid callback."))?;
+    Register::get_instance().unregister_communication(slot_id, CallbackFlavor::CommunicationStateChange(callback))
+}

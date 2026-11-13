@@ -17,6 +17,12 @@
 
 #include <map>
 #include <utility>
+#include <cmath>
+#include <mutex>
+#include <set>
+#include "accesstoken_kit.h"
+#include "ipc_skeleton.h"
+#include "telephony_permission.h"
 
 #include "event_listener_manager.h"
 #include "napi_parameter_util.h"
@@ -483,6 +489,97 @@ static napi_value OffSimActiveState(napi_env env, napi_callback_info info)
     return NapiUtil::CreateUndefined(env);
 }
 
+namespace {
+std::mutex g_communicationEnvironmentMutex;
+std::set<napi_env> g_communicationEnvironments;
+void CleanupCommunicationEnvironment(void* data)
+{
+    std::unique_ptr<napi_env> holder(static_cast<napi_env*>(data));
+    auto env = *holder;
+    EventListenerManager::UnRegisterAllListener(env);
+    std::lock_guard<std::mutex> lock(g_communicationEnvironmentMutex);
+    g_communicationEnvironments.erase(env);
+}
+bool EnsureCommunicationEnvironment(napi_env env)
+{
+    std::lock_guard<std::mutex> lock(g_communicationEnvironmentMutex);
+    if (g_communicationEnvironments.count(env) != 0) { return true; }
+    auto holder = std::make_unique<napi_env>(env);
+    if (napi_add_env_cleanup_hook(env, CleanupCommunicationEnvironment, holder.get()) != napi_ok) { return false; }
+    holder.release();
+    g_communicationEnvironments.insert(env);
+    return true;
+}
+bool HasCommunicationPermission()
+{
+    return Security::AccessToken::AccessTokenKit::VerifyAccessToken(IPCSkeleton::GetSelfTokenID(),
+        Permission::GET_NETWORK_INFO) == Security::AccessToken::PERMISSION_GRANTED;
+}
+bool ReadCommunicationArgs(napi_env env, napi_callback_info info, ObserverContext& context)
+{
+    size_t argc = 3;
+    napi_value argv[3] = {nullptr};
+    napi_valuetype type = napi_undefined;
+    if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc < 1 || argc > 2 ||
+        napi_typeof(env, argv[0], &type) != napi_ok || type != napi_function) { return false; }
+    context.slotId = DEFAULT_SIM_SLOT_ID;
+    if (argc == 2) {
+        if (napi_typeof(env, argv[1], &type) != napi_ok) { return false; }
+        if (type != napi_undefined) {
+            bool present = false;
+            if (type != napi_object || napi_has_named_property(env, argv[1], "slotId", &present) != napi_ok) { return false; }
+            if (present) {
+                napi_value slot = nullptr;
+                double value = 0;
+                if (napi_get_named_property(env, argv[1], "slotId", &slot) != napi_ok ||
+                    napi_typeof(env, slot, &type) != napi_ok || type != napi_number ||
+                    napi_get_value_double(env, slot, &value) != napi_ok || !std::isfinite(value) ||
+                    std::trunc(value) != value || value < 0 || value >= SIM_SLOT_COUNT) { return false; }
+                context.slotId = static_cast<int32_t>(value);
+            }
+        }
+    }
+    if (context.slotId < 0 || context.slotId >= SIM_SLOT_COUNT) { return false; }
+    return napi_create_reference(env, argv[0], 1, &context.callbackRef) == napi_ok;
+}
+}
+
+static napi_value OnCommunicationStateChange(napi_env env, napi_callback_info info)
+{
+    if (!HasCommunicationPermission()) {
+        NapiUtil::ThrowError(env, JS_ERROR_TELEPHONY_PERMISSION_DENIED, OBSERVER_JS_PERMISSION_ERROR_STRING);
+        return nullptr;
+    }
+    auto context = std::make_unique<ObserverContext>();
+    if (!ReadCommunicationArgs(env, info, *context)) { NapiUtil::ThrowParameterError(env); return nullptr; }
+    if (!EnsureCommunicationEnvironment(env)) {
+        napi_delete_reference(env, context->callbackRef);
+        NapiUtil::ThrowError(env, 8300003, "Failed to register environment cleanup.");
+        return nullptr;
+    }
+    context->eventType = TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE;
+    NativeOn(env, context.get());
+    OnCallback(env, context.release());
+    return NapiUtil::CreateUndefined(env);
+}
+
+static napi_value OffCommunicationStateChange(napi_env env, napi_callback_info info)
+{
+    if (!HasCommunicationPermission()) {
+        NapiUtil::ThrowError(env, JS_ERROR_TELEPHONY_PERMISSION_DENIED, OBSERVER_JS_PERMISSION_ERROR_STRING);
+        return nullptr;
+    }
+    auto context = std::make_unique<ObserverContext>();
+    if (!ReadCommunicationArgs(env, info, *context)) { NapiUtil::ThrowParameterError(env); return nullptr; }
+    context->eventType = TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE;
+    context->errorCode = EventListenerManager::UnregisterCommunicationListener(env, context->callbackRef,
+        context->slotId, context->removeListenerList);
+    context->resolved = context->errorCode == TELEPHONY_SUCCESS ||
+        context->errorCode == TELEPHONY_STATE_UNREGISTRY_DATA_NOT_EXIST;
+    OffCallback(env, context.release());
+    return NapiUtil::CreateUndefined(env);
+}
+
 napi_status InitEnumLockReason(napi_env env, napi_value exports)
 {
     napi_property_descriptor desc[] = {
@@ -511,6 +608,8 @@ napi_value InitNapiStateRegistry(napi_env env, napi_value exports)
 {
     napi_property_descriptor desc[] = {
         DECLARE_NAPI_WRITABLE_FUNCTION("on", On),
+        DECLARE_NAPI_WRITABLE_FUNCTION("onCommunicationStateChange", OnCommunicationStateChange),
+        DECLARE_NAPI_WRITABLE_FUNCTION("offCommunicationStateChange", OffCommunicationStateChange),
         DECLARE_NAPI_WRITABLE_FUNCTION("off", Off),
         DECLARE_NAPI_WRITABLE_FUNCTION("onCCallStateChange", OnCCallStateChange),
         DECLARE_NAPI_WRITABLE_FUNCTION("offCCallStateChange", OffCCallStateChange),

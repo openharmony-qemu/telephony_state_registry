@@ -99,6 +99,12 @@ struct SimActiveStateUpdate : public UpdateInfo {
     SimActiveStateUpdate(int32_t slotId, bool isActive)
         : UpdateInfo(slotId), isSimActive(isActive) {}
 };
+
+struct CommunicationStateUpdate : public UpdateInfo {
+    bool is5A = false;
+    CommunicationStateUpdate(int32_t slotId, bool state)
+        : UpdateInfo(slotId), is5A(state) {}
+};
 } // namespace Telephony
 } // namespace OHOS
 #endif // UPDATE_INFOS_H

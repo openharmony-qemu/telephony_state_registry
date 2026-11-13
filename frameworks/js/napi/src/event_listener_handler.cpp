@@ -16,6 +16,9 @@
 #include "event_listener_handler.h"
 
 #include <cinttypes>
+#include "accesstoken_kit.h"
+#include "ipc_skeleton.h"
+#include "telephony_permission.h"
 
 #include "event_listener_manager.h"
 #include "inner_event.h"
@@ -377,6 +380,11 @@ void EventListenerHandler::AddBasicHandlerToMap()
 
 void EventListenerHandler::AddSimActiveStateHandlerToMap()
 {
+    handleFuncMap_[TelephonyCallbackEventId::EVENT_ON_COMMUNICATION_STATE_UPDATE] =
+        [this](const AppExecFwk::InnerEvent::Pointer &event) {
+            HandleCallbackInfoUpdate<CommunicationStateContext, CommunicationStateUpdate,
+                TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE>(event);
+        };
     handleFuncMap_[TelephonyCallbackEventId::EVENT_ON_SIM_ACTIVE_STATE_UPDATE] =
         [this](const AppExecFwk::InnerEvent::Pointer &event) {
             HandleCallbackInfoUpdate<SimActiveStateContext, SimActiveStateUpdate,
@@ -420,6 +428,7 @@ void EventListenerHandler::AddWorkFuncToMap()
         &EventListenerHandler::WorkVoiceMailMsgIndicatorUpdated;
     workFuncMap_[TelephonyUpdateEventType::EVENT_ICC_ACCOUNT_CHANGE] = &EventListenerHandler::WorkIccAccountUpdated;
     workFuncMap_[TelephonyUpdateEventType::EVENT_CCALL_STATE_UPDATE] = &EventListenerHandler::WorkCCallStateUpdated;
+    workFuncMap_[TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE] = &EventListenerHandler::WorkCommunicationUpdated;
     workFuncMap_[TelephonyUpdateEventType::EVENT_SIM_ACTIVE_STATE] = &EventListenerHandler::WorkSimActiveUpdated;
 }
 
@@ -480,7 +489,8 @@ int32_t EventListenerHandler::RegisterEventListener(EventListener &eventListener
             eventListener.eventType == TelephonyUpdateEventType::EVENT_SIM_STATE_UPDATE ||
             eventListener.eventType == TelephonyUpdateEventType::EVENT_CALL_STATE_EX_UPDATE ||
             eventListener.eventType == TelephonyUpdateEventType::EVENT_CCALL_STATE_UPDATE ||
-            eventListener.eventType == TelephonyUpdateEventType::EVENT_SIM_ACTIVE_STATE);
+            eventListener.eventType == TelephonyUpdateEventType::EVENT_SIM_ACTIVE_STATE ||
+            eventListener.eventType == TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE);
         int32_t addResult = TelephonyStateManager::AddStateObserver(
             observer, eventListener.slotId, ToUint32t(eventListener.eventType), isUpdate);
         if (addResult != TELEPHONY_SUCCESS) {
@@ -751,15 +761,21 @@ void EventListenerHandler::WorkUpdated(uv_work_t *work, int status)
     }
     if (listener->isDeleting == nullptr || *(listener->isDeleting)) {
         TELEPHONY_LOGI("listener is deleting");
-        delete listener;
+        bool communication = listener->eventType == TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE;
+        if (communication) { delete static_cast<CommunicationStateContext*>(listener); }
+        else { delete listener; }
         listener = nullptr;
+        if (communication) { delete work; }
         return;
     }
     if (workFuncMap_.find(listener->eventType) == workFuncMap_.end() ||
         workFuncMap_.find(listener->eventType)->second == nullptr) {
         TELEPHONY_LOGE("listener state update is nullptr");
-        delete listener;
+        bool communication = listener->eventType == TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE;
+        if (communication) { delete static_cast<CommunicationStateContext*>(listener); }
+        else { delete listener; }
         listener = nullptr;
+        if (communication) { delete work; }
         return;
     }
     workFuncMap_.find(listener->eventType)->second(work, lock);
@@ -1036,6 +1052,35 @@ void EventListenerHandler::WorkSimActiveUpdated(uv_work_t *work, std::unique_loc
     napi_close_handle_scope(env, scope);
 }
 
+void EventListenerHandler::WorkCommunicationUpdated(uv_work_t *work, std::unique_lock<std::mutex> &lock)
+{
+    std::unique_ptr<uv_work_t> ownedWork(work);
+    if (work == nullptr) {
+        TELEPHONY_LOGE("work is null");
+        return;
+    }
+    std::unique_ptr<CommunicationStateContext> communicationStateInfo(
+        static_cast<CommunicationStateContext *>(work->data));
+    if (communicationStateInfo == nullptr) {
+        TELEPHONY_LOGE("communicationStateInfo is null");
+        return;
+    }
+    if (Security::AccessToken::AccessTokenKit::VerifyAccessToken(IPCSkeleton::GetSelfTokenID(),
+        Permission::GET_NETWORK_INFO) != Security::AccessToken::PERMISSION_GRANTED) { return; }
+    const napi_env &env = communicationStateInfo->env;
+    napi_handle_scope scope = nullptr;
+    napi_status status = napi_open_handle_scope(env, &scope);
+    if (status != napi_ok || scope == nullptr) {
+        TELEPHONY_LOGE("napi open handle scope failed");
+        lock.unlock();
+        return;
+    }
+    napi_value callbackValue =
+        GetNapiValue(communicationStateInfo->env, communicationStateInfo->is5A);
+    NapiReturnToJS(communicationStateInfo->env, communicationStateInfo->callbackRef, callbackValue, lock);
+    napi_close_handle_scope(env, scope);
+}
+
 bool EventListenerHandler::IsNeedHandleCallbackUpdate(TelephonyUpdateEventType eventType,
     TelephonyUpdateEventType curEventType, int32_t eventSlotId, int32_t curSlotId)
 {
@@ -1076,5 +1121,23 @@ void EventListenerHandler::WorkCCallStateUpdated(uv_work_t *work, std::unique_lo
     NapiReturnToJS(callStateInfo->env, callStateInfo->callbackRef, callbackValue, lock);
     napi_close_handle_scope(env, scope);
 }
+int32_t EventListenerHandler::UnregisterCommunicationListener(napi_env env, napi_ref callback, int32_t slotId,
+    std::list<EventListener>& removed)
+{
+    std::unique_lock<std::mutex> lock(operatorMutex_);
+    for (auto it = listenerList_.begin(); it != listenerList_.end();) {
+        if (it->env == env && it->slotId == slotId &&
+            it->eventType == TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE &&
+            IsCallBackRegister(env, callback, it->callbackRef)) {
+            SetEventListenerDeleting(it->isDeleting);
+            removed.push_back(*it);
+            it = listenerList_.erase(it);
+        } else { ++it; }
+    }
+    int32_t result = TELEPHONY_SUCCESS;
+    CheckRemoveStateObserver(TelephonyUpdateEventType::EVENT_COMMUNICATION_STATE, slotId, result);
+    return result;
+}
+
 } // namespace Telephony
 } // namespace OHOS

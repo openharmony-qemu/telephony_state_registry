@@ -14,12 +14,16 @@
  */
 
 #include "telephony_state_registry_service.h"
+#include "accesstoken_kit.h"
+#include "access_token.h"
+#include "native_token_info.h"
 
 #include <sstream>
 #include <thread>
 
 #include "common_event_manager.h"
 #include "common_event_support.h"
+#include "ipc_skeleton.h"
 #include "iservice_registry.h"
 #include "state_registry_errors.h"
 #include "string_ex.h"
@@ -597,7 +601,8 @@ int32_t TelephonyStateRegistryService::UnregisterStateChange(int32_t slotId, uin
     if (!CheckCallerIsSystemApp(mask)) {
         return TELEPHONY_ERR_ILLEGAL_USE_OF_SYSTEM_API;
     }
-    if (!CheckPermission(mask)) {
+    // Owner-scoped teardown must remain possible after permission revocation.
+    if (mask != TelephonyObserverBroker::OBSERVER_MASK_COMMUNICATION_STATE && !CheckPermission(mask)) {
         return TELEPHONY_STATE_REGISTRY_PERMISSION_DENIED;
     }
     std::unique_lock<std::shared_mutex> lock(lock_);
@@ -617,7 +622,8 @@ int32_t TelephonyStateRegistryService::UnregisterStateChange(int32_t slotId, uin
 
 bool TelephonyStateRegistryService::CheckPermission(uint32_t mask)
 {
-    if ((mask & TelephonyObserverBroker::OBSERVER_MASK_NETWORK_STATE) != 0) {
+    if ((mask & (TelephonyObserverBroker::OBSERVER_MASK_NETWORK_STATE |
+        TelephonyObserverBroker::OBSERVER_MASK_COMMUNICATION_STATE)) != 0) {
         if (!TelephonyPermission::CheckPermission(Permission::GET_NETWORK_INFO)) {
             TELEPHONY_LOGE("Check permission failed,"
                 "you must declare ohos.permission.GET_NETWORK_INFO permission for network state");
@@ -732,6 +738,13 @@ void TelephonyStateRegistryService::UpdateDataEx(const TelephonyStateRegistryRec
             }
             record.telephonyObserver_->OnCCallStateUpdated(record.slotId_, callState,
                 callIncomingNumber_[record.slotId_]);
+        }
+    }
+    if ((record.mask_ & TelephonyObserverBroker::OBSERVER_MASK_COMMUNICATION_STATE) != 0) {
+        auto known = communicationStates_.find(record.slotId_);
+        if (known != communicationStates_.end() && Security::AccessToken::AccessTokenKit::VerifyAccessToken(
+            record.tokenId_, Permission::GET_NETWORK_INFO) == Security::AccessToken::PERMISSION_GRANTED) {
+            record.telephonyObserver_->OnCommunicationStateUpdated(record.slotId_, known->second);
         }
     }
     if ((record.mask_ & TelephonyObserverBroker::OBSERVER_MASK_SIM_ACTIVE_STATE) != 0) {
@@ -1034,5 +1047,33 @@ bool TelephonyStateRegistryService::IsCommonEventServiceAbilityExist() __attribu
     }
     return true;
 }
+int32_t TelephonyStateRegistryService::UpdateCommunicationState(int32_t slotId, bool is5A)
+{
+    using namespace Security::AccessToken;
+    NativeTokenInfo nativeInfo;
+    auto token = IPCSkeleton::GetCallingTokenID();
+    if (AccessTokenKit::GetTokenTypeFlag(token) != TOKEN_NATIVE ||
+        AccessTokenKit::GetNativeTokenInfo(token, nativeInfo) != 0 || nativeInfo.processName != "telephony" ||
+        !TelephonyPermission::CheckPermission(Permission::SET_TELEPHONY_STATE)) {
+        return TELEPHONY_STATE_REGISTRY_PERMISSION_DENIED;
+    }
+    if (!VerifySlotId(slotId)) { return TELEPHONY_STATE_REGISTRY_SLODID_ERROR; }
+    std::vector<TelephonyStateRegistryRecord> records;
+    {
+        std::unique_lock<std::shared_mutex> lock(lock_);
+        auto old = communicationStates_.find(slotId);
+        if (old != communicationStates_.end() && old->second == is5A) { return TELEPHONY_SUCCESS; }
+        communicationStates_[slotId] = is5A;
+        records = stateRecords_;
+    }
+    for (const auto& record : records) {
+        if (record.slotId_ == slotId && record.IsExistStateListener(TelephonyObserverBroker::OBSERVER_MASK_COMMUNICATION_STATE) &&
+            AccessTokenKit::VerifyAccessToken(record.tokenId_, Permission::GET_NETWORK_INFO) == PERMISSION_GRANTED) {
+            record.telephonyObserver_->OnCommunicationStateUpdated(slotId, is5A);
+        }
+    }
+    return TELEPHONY_SUCCESS;
+}
+
 } // namespace Telephony
 } // namespace OHOS

@@ -98,11 +98,13 @@ pub(crate) mod ffi {
         fn on_cellular_data_connect_state_updated(slot_id: i32, data_state: i32, network_type: i32);
         fn on_network_state_updated(slot_id: i32, network_state: NetworkStateAni);
         fn on_call_state_updated(slot_id: i32, call_state: CallStateAni);
+        fn on_communication_state_updated(slot_id: i32, is5a: bool);
         fn on_sim_active_state_updated(slot_id: i32, is_active: bool);
     }
 
     unsafe extern "C++" {
         include!("observer_ani.h");
+        fn HasCommunicationPermission() -> bool;
         fn IsValidSlotIdEx(slotId: i32, eventType: u32) -> bool;
         fn EventListenerRegister(slotId: i32, eventType: u32) -> ArktsError;
         fn EventListenerUnRegister(slotId: i32, eventType: u32) -> ArktsError;

@@ -60,5 +60,13 @@ void EventListenerManager::UnRegisterAllListener(napi_env env)
     }
     handler->UnRegisterAllListener(env);
 }
+int32_t EventListenerManager::UnregisterCommunicationListener(napi_env env, napi_ref callback, int32_t slotId,
+    std::list<EventListener>& removed)
+{
+    auto handler = DelayedSingleton<EventListenerHandler>::GetInstance();
+    return handler == nullptr ? TELEPHONY_ERR_LOCAL_PTR_NULL :
+        handler->UnregisterCommunicationListener(env, callback, slotId, removed);
+}
+
 } // namespace Telephony
 } // namespace OHOS

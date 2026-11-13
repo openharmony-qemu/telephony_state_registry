@@ -295,5 +295,22 @@ void TelephonyObserverProxy::OnSimActiveStateUpdated(int32_t slotId, bool enable
         static_cast<int32_t>(ObserverBrokerCode::ON_SIM_ACTIVE_STATE_UPDATED), dataParcel, replyParcel, option);
     TELEPHONY_LOGI("TelephonyObserverProxy::OnSimActiveStateUpdated##error: %{public}d.", code);
 }
+
+void TelephonyObserverProxy::OnCommunicationStateUpdated(int32_t slotId, bool is5A)
+{
+    MessageOption option;
+    MessageParcel dataParcel;
+    MessageParcel replyParcel;
+    option.SetFlags(MessageOption::TF_ASYNC);
+    if (!dataParcel.WriteInterfaceToken(GetDescriptor())) {
+        TELEPHONY_LOGE("TelephonyObserverProxy::OnCommunicationStateUpdated WriteInterfaceToken failed!");
+        return;
+    }
+    dataParcel.WriteInt32(slotId);
+    dataParcel.WriteBool(is5A);
+    auto code = SendRequest(
+        static_cast<int32_t>(ObserverBrokerCode::ON_COMMUNICATION_STATE_UPDATED), dataParcel, replyParcel, option);
+    TELEPHONY_LOGI("TelephonyObserverProxy::OnCommunicationStateUpdated##error: %{public}d.", code);
+}
 } // namespace Telephony
 } // namespace OHOS

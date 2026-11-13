@@ -51,6 +51,8 @@ public:
         napi_env env, TelephonyUpdateEventType eventType, napi_ref ref, std::list<EventListener> &removeListenerList);
     int32_t UnregisterEventListener(
         napi_env env, TelephonyUpdateEventType eventType, std::list<EventListener> &removeListenerList);
+    int32_t UnregisterCommunicationListener(napi_env env, napi_ref callback, int32_t slotId,
+        std::list<EventListener>& removed);
     void UnRegisterAllListener(napi_env env);
 
 private:
@@ -91,6 +93,7 @@ private:
     static void WorkVoiceMailMsgIndicatorUpdated(uv_work_t *work, std::unique_lock<std::mutex> &lock);
     static void WorkIccAccountUpdated(uv_work_t *work, std::unique_lock<std::mutex> &lock);
     static void WorkCCallStateUpdated(uv_work_t *work, std::unique_lock<std::mutex> &lock);
+    static void WorkCommunicationUpdated(uv_work_t *work, std::unique_lock<std::mutex> &lock);
     static void WorkSimActiveUpdated(uv_work_t *work, std::unique_lock<std::mutex> &lock);
 
     template<typename T, typename D, TelephonyUpdateEventType eventType>

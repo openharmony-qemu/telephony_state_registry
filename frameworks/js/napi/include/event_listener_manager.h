@@ -55,6 +55,8 @@ public:
         std::list<EventListener> &removeListenerList);
     static int32_t UnregisterEventListener(
         napi_env env, TelephonyUpdateEventType eventType, std::list<EventListener> &removeListenerList);
+    static int32_t UnregisterCommunicationListener(napi_env env, napi_ref callback, int32_t slotId,
+        std::list<EventListener>& removed);
     static void UnRegisterAllListener(napi_env env);
 };
 } // namespace Telephony

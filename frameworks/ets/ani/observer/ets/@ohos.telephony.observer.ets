@@ -63,6 +63,15 @@ export default namespace observer {
   export native function onCallStateChangeOptions(options: ObserverOptions, callback: Callback<CallStateInfo>): void;
   export native function offCallStateChange(callback?: Callback<CallStateInfo>): void;
 
+  export function onCommunicationStateChange(callback: Callback<boolean>, options?: ObserverOptions): void {
+    onCommunicationStateChangeInner(callback, options?.slotId ?? 0);
+  }
+  export function offCommunicationStateChange(callback: Callback<boolean>, options?: ObserverOptions): void {
+    offCommunicationStateChangeInner(callback, options?.slotId ?? 0);
+  }
+  native function onCommunicationStateChangeInner(callback: Callback<boolean>, slotId: int): void;
+  native function offCommunicationStateChangeInner(callback: Callback<boolean>, slotId: int): void;
+
   export native function onGetSimActiveState(slotId: int, callback: Callback<boolean>): void;
   export native function offGetSimActiveState(callback?: Callback<boolean>): void;
 
